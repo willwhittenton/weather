@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather Station Data</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f7;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background-color: #1e88e5;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 12px 12px 0 0;
+            margin-bottom: 0;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .card-content {
+            padding: 20px;
+        }
+        
+        .station-selector {
+            margin-bottom: 20px;
+            display: flex;
+            overflow-x: auto;
+            padding: 10px 0;
+            scrollbar-width: none; /* Firefox */
+        }
+        
+        .station-selector::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        
+        .station-btn {
+            background-color: #e0e0e0;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
+            margin-right: 10px;
+            font-size: 14px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        
+        .station-btn.active {
+            background-color: #1e88e5;
+            color: white;
+        }
+        
+        .current-weather {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .temp-display {
+            font-size: 48px;
+            font-weight: bold;
+        }
+        
+        .weather-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .detail-item {
+            padding: 10px;
+            background-color: #f5f5f7;
+            border-radius: 8px;
+        }
+        
+        .detail-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .detail-label {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 200px;
+            margin-top: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            color: #666;
+            font-weight: normal;
+        }
+        
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .refresh-btn {
+            background-color: #1e88e5;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            display: block;
+            margin: 20px auto;
+            width: 100%;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .timestamp {
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Weather Station Data</h1>
+        
+        <!-- Station selector -->
+        <div class="card">
+            <div class="header">
+                <h2>Stations</h2>
+            </div>
+            <div class="card-content">
+                <div class="station-selector" id="station-selector">
+                    <button class="station-btn active" data-station="all">All Stations</button>
+                    <!-- Stations will be loaded here -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Current weather -->
+        <div class="card">
+            <div class="header">
+                <h2>Current Conditions</h2>
+            </div>
+            <div class="card-content">
+                <div id="current-weather" class="loading">Loading current weather...</div>
+            </div>
+        </div>
+        
+        <!-- Summary data -->
+        <div class="card">
+            <div class="header">
+                <h2>7-Day Summary</h2>
+            </div>
+            <div class="card-content">
+                <div id="summary-data" class="loading">Loading summary data...</div>
+            </div>
+        </div>
+        
+        <!-- Recent observations -->
+        <div class="card">
+            <div class="header">
+                <h2>Recent Observations</h2>
+            </div>
+            <div class="card-content">
+                <div id="recent-observations" class="loading">Loading recent observations...</div>
+            </div>
+        </div>
+        
+        <button id="refresh-btn" class="refresh-btn">Refresh Data</button>
+        
+        <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <script>
+        // Replace with your API server address
+        const API_BASE = 'http://YOUR_PC_IP:5000/api';
+        let selectedStation = 'all';
+        let lastRefresh = new Date();
+        
+        // Format date
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+        
+        // Format values to fixed decimal places
+        function fmt(value, decimals = 1) {
+            if (value === null || value === undefined) return 'N/A';
+            return parseFloat(value).toFixed(decimals);
+        }
+        
+        // Load stations list
+        async function loadStations() {
+            try {
+                const response = await fetch(`${API_BASE}/stations`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                
+                const data = await response.json();
+                const stationSelector = document.getElementById('station-selector');
+                
+                // Keep the "All Stations" button
+                const allButton = stationSelector.firstElementChild;
+                stationSelector.innerHTML = '';
+                stationSelector.appendChild(allButton);
+                
+                // Add station buttons
+                data.stations.forEach(station => {
+                    const button = document.createElement('button');
+                    button.className = 'station-btn';
+                    button.textContent = station.neighborhood || station.station_id;
+                    button.dataset.station = station.station_id;
+                    button.addEventListener('click', () => {
+                        // Set active station
+                        document.querySelectorAll('.station-btn').forEach(btn => {
+                            btn.classList.remove('active');
+                        });
+                        button.classList.add('active');
+                        selectedStation = station.station_id;
+                        refreshData();
+                    });
+                    stationSelector.appendChild(button);
+                });
+            } catch (error) {
+                console.error('Error loading stations:', error);
+            }
+        }
+        
+        // Load current weather
+        async function loadCurrentWeather() {
+            try {
+                const endpoint = `${API_BASE}/recent?limit=1${selectedStation !== 'all' ? '&station_id=' + selectedStation : ''}`;
+                const response = await fetch(endpoint);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                
+                const data = await response.json();
+                const currentWeatherEl = document.getElementById('current-weather');
+                
+                if (data.data.length === 0) {
+                    currentWeatherEl.innerHTML = '<div class="error">No current weather data available</div>';
+                    return;
+                }
+                
+                const current = data.data[0];
+                
+                currentWeatherEl.innerHTML = `
+                    <div class="current-weather">
+                        <div class="temp-display">${fmt(current.temp_f)}°F</div>
+                        <div>
+                            <div>${current.neighborhood || current.station_id}</div>
+                            <div>${formatDate(current.observation_time)}</div>
+                        </div>
+                    </div>
+                    <div class="weather-details">
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(current.humidity)}%</div>
+                            <div class="detail-label">Humidity</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(current.wind_mph)} mph</div>
+                            <div class="detail-label">Wind</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(current.precip_today_in, 2)}"</div>
+                            <div class="detail-label">Precipitation</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${current.station_id}</div>
+                            <div class="detail-label">Station ID</div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading current weather:', error);
+                document.getElementById('current-weather').innerHTML = `
+                    <div class="error">Error loading current weather data: ${error.message}</div>
+                `;
+            }
+        }
+        
+        // Load summary data
+        async function loadSummary() {
+            try {
+                const params = new URLSearchParams({
+                    days: 7
+                });
+                
+                if (selectedStation !== 'all') {
+                    params.append('station_id', selectedStation);
+                }
+                
+                const response = await fetch(`${API_BASE}/summary?${params}`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                
+                const data = await response.json();
+                const summary = data.summary;
+                
+                document.getElementById('summary-data').innerHTML = `
+                    <div class="weather-details">
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(summary.avg_temp)}°F</div>
+                            <div class="detail-label">Avg Temp</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(summary.min_temp)}°F - ${fmt(summary.max_temp)}°F</div>
+                            <div class="detail-label">Range</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(summary.avg_humidity)}%</div>
+                            <div class="detail-label">Avg Humidity</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(summary.avg_wind)} mph</div>
+                            <div class="detail-label">Avg Wind</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(summary.max_wind_gust)} mph</div>
+                            <div class="detail-label">Max Gust</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-value">${fmt(summary.max_precip, 2)}"</div>
+                            <div class="detail-label">Max Precip</div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading summary data:', error);
+                document.getElementById('summary-data').innerHTML = `
+                    <div class="error">Error loading summary data: ${error.message}</div>
+                `;
+            }
+        }
+        
+        // Load recent observations
+        async function loadRecentObservations() {
+            try {
+                const params = new URLSearchParams({
+                    limit: 10
+                });
+                
+                if (selectedStation !== 'all') {
+                    params.append('station_id', selectedStation);
+                }
+                
+                const response = await fetch(`${API_BASE}/recent?${params}`);
+                if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                
+                const data = await response.json();
+                
+                if (data.data.length === 0) {
+                    document.getElementById('recent-observations').innerHTML = '<div class="error">No observations found</div>';
+                    return;
+                }
+                
+                let html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Location</th>
+                                <th>Temp</th>
+                                <th>Humidity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                data.data.forEach(obs => {
+                    html += `
+                        <tr>
+                            <td>${formatDate(obs.observation_time)}</td>
+                            <td>${obs.neighborhood || obs.station_id}</td>
+                            <td>${fmt(obs.temp_f)}°F</td>
+                            <td>${fmt(obs.humidity)}%</td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('recent-observations').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading recent observations:', error);
+                document.getElementById('recent-observations').innerHTML = `
+                    <div class="error">Error loading recent observations: ${error.message}</div>
+                `;
+            }
+        }
+        
+        // Update the timestamp
+        function updateTimestamp() {
+            lastRefresh = new Date();
+            document.getElementById('timestamp').textContent = `Last updated: ${lastRefresh.toLocaleString()}`;
+        }
+        
+        // Refresh all data
+        function refreshData() {
+            // Show loading indicators
+            document.getElementById('current-weather').innerHTML = '<div class="loading">Loading current weather...</div>';
+            document.getElementById('summary-data').innerHTML = '<div class="loading">Loading summary data...</div>';
+            document.getElementById('recent-observations').innerHTML = '<div class="loading">Loading recent observations...</div>';
+            
+            // Load all data
+            loadCurrentWeather();
+            loadSummary();
+            loadRecentObservations();
+            
+            // Update timestamp
+            updateTimestamp();
+        }
+        
+        // Initialize page
+        window.addEventListener('DOMContentLoaded', () => {
+            // Load stations first
+            loadStations();
+            
+            // Load initial data
+            refreshData();
+            
+            // Set up refresh button
+            document.getElementById('refresh-btn').addEventListener('click', refreshData);
+            
+            // Set up "All Stations" button
+            document.querySelector('.station-btn[data-station="all"]').addEventListener('click', () => {
+                document.querySelectorAll('.station-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.querySelector('.station-btn[data-station="all"]').classList.add('active');
+                selectedStation = 'all';
+                refreshData();
+            });
+        });
+    </script>
+</body>
+</html>

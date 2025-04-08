@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Weather Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .card { background: #f9f9f9; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .temp { font-size: 2em; font-weight: bold; }
+        .loading { color: #999; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+        button { background: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Weather Dashboard</h1>
+    
+    <div class="card">
+        <h2>Current Conditions</h2>
+        <div id="current" class="loading">Loading...</div>
+    </div>
+    
+    <div class="card">
+        <h2>Recent Observations</h2>
+        <div id="recent" class="loading">Loading...</div>
+    </div>
+    
+    <div class="card">
+        <h2>Summary (Last 7 Days)</h2>
+        <div id="summary" class="loading">Loading...</div>
+    </div>
+    
+    <button onclick="refreshAll()">Refresh Data</button>
+
+    <script>
+        // Replace with your server address
+        const API_BASE = 'http://YOUR_PC_IP:5000/api';
+        
+        // Format date objects nicely
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleString();
+        }
+        
+        // Load recent data
+        async function loadRecent() {
+            try {
+                const response = await fetch(`${API_BASE}/recent?limit=5`);
+                const data = await response.json();
+                
+                let html = '<table><tr><th>Time</th><th>Location</th><th>Temp</th><th>Humidity</th></tr>';
+                
+                data.data.forEach(item => {
+                    html += `<tr>
+                        <td>${formatDate(item.observation_time)}</td>
+                        <td>${item.neighborhood}</td>
+                        <td>${item.temp_f}°F</td>
+                        <td>${item.humidity}%</td>
+                    </tr>`;
+                });
+                
+                html += '</table>';
+                document.getElementById('recent').innerHTML = html;
+                
+                // Also update current conditions with the first (most recent) record
+                if (data.data.length > 0) {
+                    const current = data.data[0];
+                    document.getElementById('current').innerHTML = `
+                        <div class="temp">${current.temp_f}°F</div>
+                        <div>Humidity: ${current.humidity}%</div>
+                        <div>Wind: ${current.wind_mph} mph</div>
+                        <div>Location: ${current.neighborhood}</div>
+                        <div>As of: ${formatDate(current.observation_time)}</div>
+                    `;
+                }
+            } catch (e) {
+                document.getElementById('recent').innerHTML = 'Error loading data: ' + e.message;
+                document.getElementById('current').innerHTML = 'Error loading data';
+            }
+        }
+        
+        // Load summary data
+        async function loadSummary() {
+            try {
+                const response = await fetch(`${API_BASE}/summary?days=7`);
+                const data = await response.json();
+                const summary = data.summary;
+                
+                document.getElementById('summary').innerHTML = `
+                    <div>Average Temperature: ${summary.avg_temp.toFixed(1)}°F</div>
+                    <div>Range: ${summary.min_temp.toFixed(1)}°F to ${summary.max_temp.toFixed(1)}°F</div>
+                    <div>Average Humidity: ${summary.avg_humidity.toFixed(1)}%</div>
+                    <div>Average Wind: ${summary.avg_wind.toFixed(1)} mph</div>
+                    <div>Max Wind Gust: ${summary.max_wind_gust.toFixed(1)} mph</div>
+                `;
+            } catch (e) {
+                document.getElementById('summary').innerHTML = 'Error loading data: ' + e.message;
+            }
+        }
+        
+        // Refresh all data
+        function refreshAll() {
+            document.getElementById('current').innerHTML = 'Loading...';
+            document.getElementById('recent').innerHTML = 'Loading...';
+            document.getElementById('summary').innerHTML = 'Loading...';
+            
+            loadRecent();
+            loadSummary();
+        }
+        
+        // Initial data load
+        window.onload = refreshAll;
+    </script>
+</body>
+</html>
